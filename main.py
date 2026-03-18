@@ -185,4 +185,4 @@ app.add_handler(MessageHandler(filters.PHOTO, photo))
 app.add_handler(CommandHandler("verify", verify))
 
 print("PRO Bot running...")
-app.run_polling(
+app.run_polling()
