@@ -237,4 +237,4 @@ app.add_handler(MessageHandler(filters.TEXT, handle_text))
 app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
 print("Bot is running...")
-app.run_pol
+app.run_polling()
