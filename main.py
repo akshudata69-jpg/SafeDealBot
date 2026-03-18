@@ -7,7 +7,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ---------------- CONFIG ----------------
-TOKEN = os.getenv("8721801096:AAGL6uzsslmgPuWGrfmLBSKKOtzNlU5d8s4")
+TOKEN = os.getenv("TOKEN")
 CHANNEL = "@AksharStore"
 OWNER_USERNAME = "@KING_HU_MAI"
 ADMIN_ID = 1804489867  # your telegram ID
