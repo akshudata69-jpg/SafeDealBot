@@ -1,25 +1,178 @@
-name: Run Bot
+import os
+import json
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
-on:
-  workflow_dispatch:
+TOKEN = os.getenv("TOKEN")
+ADMIN_ID = 1804489867
+CHANNEL = "@AKSHARSTORE"
 
-jobs:
-  run-bot:
-    runs-on: ubuntu-latest
+DATA_FILE = "data.json"
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+# ================= DATA =================
+def load_data():
+    try:
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
 
-      - name: Install requirements
-        run: pip install -r requirements.txt
+# ================= JOIN CHECK =================
+async def is_joined(user_id, context):
+    try:
+        member = await context.bot.get_chat_member(CHANNEL, user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except:
+        return False
 
-      - name: Run bot
-        env:
-          TOKEN: ${{ secrets.TOKEN }}
-        run: python main.py
+# ================= START =================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_joined(update.effective_user.id, context):
+        keyboard = [[InlineKeyboardButton("Join Channel", url="https://t.me/AKSHARSTORE")]]
+        await update.message.reply_text("❌ Join channel first", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("🚨 Report Seller", callback_data="report_menu")],
+        [InlineKeyboardButton("📝 Register as Seller", callback_data="register")],
+        [InlineKeyboardButton("🏆 Trusted Sellers", callback_data="top")],
+        [InlineKeyboardButton("🚫 Scammers List", callback_data="scammers")],
+        [InlineKeyboardButton("🛒 Buy Accounts From Us", url="https://t.me/AKSHARSTORE")]
+    ]
+
+    await update.message.reply_text(
+        "🔥 Welcome to SafeDeal Bot\n\nMade by @KING_HU_MAI",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ================= BUTTON =================
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+
+    if query.data == "report_menu":
+        keyboard = [
+            [InlineKeyboardButton("📤 Submit Proof", callback_data="proof")],
+            [InlineKeyboardButton("❌ No Proof (Contact Admin)", callback_data="no_proof")]
+        ]
+        await query.message.reply_text("Select option:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    elif query.data == "proof":
+        context.user_data["mode"] = "proof"
+        await query.message.reply_text("Send seller username:")
+
+    elif query.data == "no_proof":
+        await context.bot.send_message(ADMIN_ID, "⚠️ User reported without proof")
+        await query.message.reply_text("📤 Sent to admin")
+
+    elif query.data == "register":
+        context.user_data["mode"] = "reg_number"
+        await query.message.reply_text("Enter your number:")
+
+    elif query.data == "top":
+        sorted_data = sorted(data.items(), key=lambda x: x[1].get("vouch",0), reverse=True)
+        msg = "🏆 Trusted Sellers:\n\n"
+        for i,(k,v) in enumerate(sorted_data[:5],1):
+            msg += f"{i}. {k} ({v.get('vouch',0)} vouches)\n"
+        await query.message.reply_text(msg)
+
+    elif query.data == "scammers":
+        msg = "🚫 Scammers:\n\n"
+        for k,v in data.items():
+            if v.get("reports",0) >= 3 or v.get("scammer"):
+                msg += f"{k}\n"
+        await query.message.reply_text(msg if msg!="🚫 Scammers:\n\n" else "No scammers yet")
+
+# ================= TEXT =================
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mode = context.user_data.get("mode")
+    text = update.message.text
+    data = load_data()
+
+    if mode == "proof":
+        seller = text.lower()
+        context.user_data["seller"] = seller
+        await update.message.reply_text("📸 Send proof image")
+
+    elif mode == "reg_number":
+        context.user_data["number"] = text
+        context.user_data["mode"] = "reg_channel"
+        await update.message.reply_text("Enter your channel:")
+
+    elif mode == "reg_channel":
+        context.user_data["channel"] = text
+        context.user_data["mode"] = "reg_exp"
+        await update.message.reply_text("Experience (years):")
+
+    elif mode == "reg_exp":
+        context.user_data["exp"] = text
+        context.user_data["mode"] = "reg_deals"
+        await update.message.reply_text("Number of deals done:")
+
+    elif mode == "reg_deals":
+        user = update.effective_user.username
+        msg = f"📝 New Seller Request\n\nUser: @{user}\nNumber: {context.user_data['number']}\nChannel: {context.user_data['channel']}\nExp: {context.user_data['exp']}\nDeals: {text}"
+
+        keyboard = [[
+            InlineKeyboardButton("✅ Approve", callback_data=f"approveSeller_{user}"),
+            InlineKeyboardButton("❌ Reject", callback_data=f"rejectSeller_{user}")
+        ]]
+
+        await context.bot.send_message(ADMIN_ID, msg, reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.message.reply_text("📤 Sent for admin approval")
+
+# ================= PHOTO =================
+async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    seller = context.user_data.get("seller")
+    if not seller:
+        return
+
+    file_id = update.message.photo[-1].file_id
+
+    keyboard = [[
+        InlineKeyboardButton("✅ Approve", callback_data=f"approveProof_{seller}"),
+        InlineKeyboardButton("❌ Reject", callback_data=f"rejectProof_{seller}")
+    ]]
+
+    await context.bot.send_photo(ADMIN_ID, file_id, caption=f"Proof for {seller}", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("⏳ Wait for admin approval")
+
+# ================= ADMIN =================
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = load_data()
+    parts = query.data.split("_")
+
+    if parts[0]=="approveProof":
+        seller = parts[1]
+        data.setdefault(seller,{"vouch":0,"reports":0})
+        data[seller]["vouch"] += 5
+        await query.message.reply_text(f"✅ Proof approved (+5 points)")
+
+    elif parts[0]=="approveSeller":
+        await query.message.reply_text("👑 Seller Approved")
+
+    elif parts[0]=="rejectSeller":
+        await query.message.reply_text("❌ Rejected")
+
+    save_data(data)
+
+# ================= RUN =================
+app = ApplicationBuilder().token(TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CallbackQueryHandler(button))
+app.add_handler(CallbackQueryHandler(admin, pattern="^(approve|reject)"))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+app.add_handler(MessageHandler(filters.PHOTO, photo))
+
+print("SUPER BOT RUNNING 🔥")
+app.run_polling()
