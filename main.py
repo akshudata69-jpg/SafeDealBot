@@ -7,10 +7,10 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ---------------- CONFIG ----------------
-TOKEN = os.getenv("TOKEN")
-CHANNEL = "@yourchannel"
-OWNER_USERNAME = "@aksharstore"
-ADMIN_ID = 123456789  # your telegram ID
+TOKEN = os.getenv("8721801096:AAGL6uzsslmgPuWGrfmLBSKKOtzNlU5d8s4")
+CHANNEL = "@AksharStore"
+OWNER_USERNAME = "@KING_HU_MAI"
+ADMIN_ID = 1804489867  # your telegram ID
 
 # ---------------- DATABASE ----------------
 conn = sqlite3.connect("bot.db", check_same_thread=False)
